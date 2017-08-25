@@ -1,0 +1,198 @@
+#!/bin/bash
+# Author: Lily Shellhammer
+# Date: 1/27/17
+# Assignment 1: Stats
+
+trap "rm -f  $row* $temp*; echo 'CTRL+C received, exiting'; exit 1" INT HUP TERM
+
+# Function: averages
+# Description: sums values and divides by count to save avg of row in an array
+# Input: params: $1 is file $2 is rows or col spec
+# Output: Saves avg and median values in arrays, outputs in correct format
+
+function averages {
+if [ ! -e $1 ]
+then
+   echo "Error! File doesn't exist"
+   exit 1
+fi
+#FIND HOW LONG THE FIRST ROW IS
+read row < $1
+count=0
+for i in $row
+do
+   ((count++))
+done    
+#SAVE MEDIAN POSITION VALUE
+halfcount=`expr $count / 2 `
+
+averageString=" "
+medianString=" "
+sum=0
+counter=0
+j=0
+
+#READ VARS, SUM VALS AT EACH POSITION, SAVE MEDIAN
+while read rows
+do
+   for i in $rows
+   do
+      if [ $counter = $halfcount ]
+      then
+	 median=$i
+      fi
+      sum=`expr $sum + $i`
+      counter=`expr $counter + 1`
+   done
+   j=`expr $j + 1`
+   total=`expr \( $sum + \( $counter / 2 \) \)  / $counter`
+   average[$j]=$total
+   median[$j]=$median
+   sum=0
+   counter=0
+done < $1
+
+#PRINT IN CORRECT FORMAT DEPENDING ON ROWS OR COLS SPEC
+if [[ $2 == "-rows" ]]
+then
+   echo -e "Average\tMedian"
+   for i in `seq 1 $count`
+   do
+      echo -e ${average[$i]}"\t"${median[$i]}
+   done 
+else
+   count=`expr $count + 1`
+   echo "Averages:"
+   for i in `seq 1 $count`
+   do
+      echo -en ${average[$i]}"\t"
+   done
+   echo
+   echo "Medians:"
+   for i in `seq 1 $count`
+   do
+      echo -en ${median[$i]}"\t"
+   done
+   echo
+fi
+
+}
+
+
+# Function: sortfunction
+# Description: takes regular rows file, sorts each line to be in numerical order
+# Input: params: $1 row or col spec, $2 file in row format
+# Output: file in row format that is sorted
+
+function sortfunction {
+if [ ! -e $2 ]
+then
+   echo "Error: File doesn't exist"
+   exit 1;
+fi
+
+temp="temp"
+row="row"
+#READ IN ROW, ECHO TO FILE, SORT FILE, ECHO SORTED LINE BACK INTO A FINAL SORTED FILE
+while read rows 
+do
+   for i in $rows
+   do
+      echo $i >> "$temp$$"
+   done
+   sort -n $temp$$ | tr '\n' '\t' >> $row$$
+   echo " " >> $row$$
+   rm $temp$$
+done < $2
+averages $row$$ $1
+}
+
+# Function: determineRowsCols
+# Description: Rearranges col file to row format if col spec, otherwise calls sortfunction on file
+# Input: Params: $1 row or col spec, $2 file name
+# Output: call sortfunction on row format file and $1 row or col spec
+
+function determineRowsCols {
+tempCol="tempcolfile"
+tempRow="temprowfile"
+inputFile="temp"
+counter=0
+if [[ $1 == -r* ]];
+then
+   #IF ROWS, EXECUTE AVERAGES FUNCTION
+   sortfunction $1 $2
+elif [[ $1 == -c* ]];
+then
+   #IF COLS, REARRANGE COLS INTO ROW FORMAT FILE
+   read row < $2
+   count=0
+   for i in $row
+   do
+      count=`expr $count + 1`
+   done
+   for i in `seq 1 $count`
+   do
+      cut -f $i $2 > $tempCol$$
+      cat $tempCol$$ | tr '\n' '\t' >> "$tempRow$$"
+      echo "" >> "$tempRow$$"
+   done
+
+   sortfunction $1 $tempRow$$ 
+fi
+}
+
+# MAIN FUNCTION
+# Description: Checks command line arg amount and validity
+# Input: Command line args
+# Output: calls determineRowsCols on file and command line args, deletes remaining files
+
+datafilepath="datafile$$"
+#CHECK ARGS
+if [ $# = 2 ]
+then
+   #check to see if file provided exists
+   if [ ! -f $2 ]
+   then
+      echo "Error: file does not exist" >&2
+      exit 1
+   else
+      read row < $2
+      if [ -z "$row" ]
+      then
+	 echo "Error: empty file" >&2
+	 exit 1
+      else
+	 datafilepath=$2
+      fi
+   fi
+elif [ $# -ne 1 ]
+then
+   #incorrect arguments: provide correct syntax
+   echo "stats {-rows|-cols} [file] " >&2
+   exit 1
+else
+   cat > "$datafilepath"
+fi
+determineRowsCols $1 $datafilepath
+
+#DELETE TEMP FILES
+read row < $datafilepath
+if [ ! -z "$row" ] 
+then
+   r=(row*)
+   if [ -e "${r[0]}" ]
+   then
+      rm row*
+   fi
+   
+   d=(data*)
+   if [ -e "${d[0]}" ]
+   then
+      rm data*
+   fi
+   t=(temp*)
+   if [ -e "${t[0]}" ]
+   then
+      rm temp*
+   fi
+fi
